@@ -119,9 +119,11 @@ export default function Home() {
   const resultRef = useRef<HTMLDivElement>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "info" | "error">("success");
 
   useEffect(() => {
     if (result) {
+      setToastType("success");
       setToastMessage("Media extracted successfully!");
       setShowToast(true);
       const toastTimer = setTimeout(() => {
@@ -138,6 +140,20 @@ export default function Home() {
       };
     }
   }, [result]);
+
+  useEffect(() => {
+    const handleDownloadTriggered = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setToastType("info");
+      setToastMessage(customEvent.detail?.message || "Opening media directly. If it plays, simply long-press or right-click to save.");
+      setShowToast(true);
+    };
+
+    window.addEventListener('media-download-triggered', handleDownloadTriggered);
+    return () => {
+      window.removeEventListener('media-download-triggered', handleDownloadTriggered);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -1053,10 +1069,29 @@ export default function Home() {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-[100] flex items-center gap-3 bg-zinc-900/95 border border-emerald-500/30 text-white px-5 py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(16,185,129,0.15)] backdrop-blur-xl max-w-sm"
+            className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 bg-zinc-900/95 border ${
+              toastType === "success" 
+                ? "border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.15)]" 
+                : toastType === "error"
+                ? "border-red-500/30 shadow-[0_20px_50px_rgba(239,68,68,0.15)]"
+                : "border-blue-500/30 shadow-[0_20px_50px_rgba(59,130,246,0.15)]"
+            } text-white px-5 py-3.5 rounded-2xl backdrop-blur-xl max-w-sm`}
           >
-            <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <div className={`w-5 h-5 rounded-full ${
+              toastType === "success" 
+                ? "bg-emerald-500/10" 
+                : toastType === "error"
+                ? "bg-red-500/10"
+                : "bg-blue-500/10"
+            } flex items-center justify-center shrink-0`}
+            >
+              {toastType === "success" ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : toastType === "error" ? (
+                <AlertCircle className="w-4 h-4 text-red-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-blue-400" />
+              )}
             </div>
             <p className="text-xs font-semibold tracking-wide text-zinc-100">{toastMessage}</p>
             <button 

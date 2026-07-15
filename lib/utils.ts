@@ -5,28 +5,35 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export async function forceDownload(url: string, filename: string) {
-  try {
-    // Attempt client-side fetch (works if CORS is allowed)
-    const response = await fetch(url, { mode: 'cors' });
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(blobUrl);
-  } catch (error) {
-    console.warn("Client-side download failed (likely due to CORS). Falling back to server proxy.", error);
-    // Fallback: trigger download via our server proxy
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-    const link = document.createElement('a');
-    link.href = proxyUrl;
-    // Standard download trigger
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+export function forceDownload(url: string, filename: string) {
+  // Programmatically create a hidden <a> element
+  const link = document.createElement('a');
+  
+  // Set href to the raw extracted media URL
+  link.href = url;
+  
+  // Set target="_blank" and rel="noopener noreferrer"
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  
+  // Set the download attribute to a default filename
+  link.download = filename || "dezdownload-media";
+  
+  // Hide the element
+  link.style.display = 'none';
+  
+  // Append the element to the document body, trigger .click(), and remove it from the DOM immediately
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // Dispatch a custom event to trigger toast/UI notification letting the user know to save the media if it plays
+  if (typeof window !== 'undefined') {
+    const event = new CustomEvent('media-download-triggered', {
+      detail: {
+        message: "Opening media directly. If it plays, simply long-press or right-click to save."
+      }
+    });
+    window.dispatchEvent(event);
   }
 }
