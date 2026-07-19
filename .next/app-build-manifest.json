@@ -1,49 +1,9 @@
 {
   "pages": {
-    "/_not-found/page": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/chunks/app/_not-found/page-fdaab63854682762.js"
-    ],
-    "/layout": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/css/55f64becfa665252.css",
-      "static/chunks/app/layout-cb762744d6c90089.js"
-    ],
     "/api/download/route": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/chunks/app/api/download/route-9331b057935818e7.js"
-    ],
-    "/api/proxy/route": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/chunks/app/api/proxy/route-9331b057935818e7.js"
-    ],
-    "/docs/page": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/chunks/197-a1e5a56a2a90a401.js",
-      "static/chunks/app/docs/page-ba2d5ebb1f66b5cf.js"
-    ],
-    "/page": [
-      "static/chunks/webpack-0fdcf482390c057c.js",
-      "static/chunks/4bd1b696-21f374d1156f834a.js",
-      "static/chunks/255-9360bdb363010bcb.js",
-      "static/chunks/main-app-052f5fd5b0713e7d.js",
-      "static/chunks/197-a1e5a56a2a90a401.js",
-      "static/chunks/app/page-a6b60af934bb6638.js"
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/download/route.js"
     ]
   }
 }

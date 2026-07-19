@@ -1,36 +1,25 @@
 import axios from "axios";
-import https from "https";
-import http from "http";
 
-const BASE = "https://downr.org";
-const ANALYTICS = `${BASE}/.netlify/functions/analytics`;
-const DOWNLOAD = `${BASE}/.netlify/functions/download`;
-const NYT = `${BASE}/.netlify/functions/nyt`;
+// Cobalt v10 API — endpoint is POST / at the base URL (not /api/json which was the old v7 path)
+// Configure via .env.local:
+//   COBALT_API_URL  — base URL of your Cobalt instance (defaults to api.cobalt.tools)
+//   COBALT_API_KEY  — optional Api-Key if your instance requires key auth
+const COBALT_BASE_URL = (process.env.COBALT_API_URL || "https://api.cobalt.tools").replace(/\/+$/, "");
+const COBALT_API = `${COBALT_BASE_URL}/`;
+const COBALT_API_KEY = process.env.COBALT_API_KEY || "";
 
-// 1. Connection pooling for high concurrency
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 200, maxFreeSockets: 50, timeout: 60000 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 200, maxFreeSockets: 50, timeout: 60000 });
-
-const apiClient = axios.create({
-  httpAgent,
-  httpsAgent,
-});
-
-// 2. User-Agent Rotation
-const UAs = [
-  "Mozilla/5.0 (Linux; Android 15; SM-F958 Build/AP3A.240905.015) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36",
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
-];
-
-function getRandomUA() {
-  return UAs[Math.floor(Math.random() * UAs.length)];
+function buildCobaltHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json"
+  };
+  if (COBALT_API_KEY) {
+    headers["Authorization"] = `Api-Key ${COBALT_API_KEY}`;
+  }
+  return headers;
 }
 
-// 3. In-memory caching for redundant URL requests
+// In-memory caching for redundant URL requests
 interface CacheEntry {
   data: any;
   expiresAt: number;
@@ -48,152 +37,126 @@ setInterval(() => {
   }
 }, 1000 * 60 * 5); // every 5 minutes
 
-function parseCookie(setCookie: string[] = []) {
-  return setCookie.map(v => v.split(";")[0]).join("; ");
-}
-
-function parseData(data: any) {
-  if (typeof data !== "string") return data;
-  const text = data.trim();
+function sanitizeUrl(inputUrl: string): string {
   try {
-    return JSON.parse(text);
-  } catch {
-    return text;
+    const trimmed = inputUrl.trim();
+    const parsed = new URL(trimmed);
+    const params = new URLSearchParams(parsed.search);
+    
+    // Specifically strip out 'list' and 'si'
+    params.delete("list");
+    params.delete("si");
+    
+    // Strip out any trailing empty parameters
+    const keysToDelete: string[] = [];
+    params.forEach((value, key) => {
+      if (!key || value === "" || value === null || value === undefined) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach(key => params.delete(key));
+    
+    const searchString = params.toString();
+    parsed.search = searchString ? `?${searchString}` : "";
+    return parsed.toString();
+  } catch (e) {
+    return inputUrl.trim();
   }
 }
 
-export function isOk(status: number, data: any) {
-  const isObject = data && typeof data === "object";
+export function isCobaltOk(status: number, data: any) {
   if (status < 200 || status >= 300) return false;
-  if (data === null || data === undefined) return false;
-  if (data === "") return false;
-  if (data === "error") return false;
-  if (data === "failed") return false;
-  if (data === "user_retry_required") return false;
-  if (isObject) {
-    if (data.error === true || data.Error === true) return false;
-    if (data.status === false || data.Status === false) return false;
-    if (data.success === false || data.Success === false) return false;
-    if (data.code === 403 || data.Code === 403) return false;
-    if (data.error === "user_retry_required" || data.Error === "user_retry_required") return false;
-  }
-  return true;
+  if (!data || typeof data !== "object") return false;
+  if (data.status === "error") return false;
+  return data.status === "tunnel" || data.status === "redirect" || data.status === "picker";
 }
 
 export function getError(data: any, status: number) {
-  const isObject = data && typeof data === "object";
-  const hasDeceptiveError = 
-    data === "user_retry_required" ||
-    (isObject && (
-      data.Status === false ||
-      data.status === false ||
-      data.Code === 403 ||
-      data.code === 403 ||
-      data.Error === "user_retry_required" ||
-      data.error === "user_retry_required"
-    ));
-    
-  if (hasDeceptiveError) {
-    return "⚠️ URL tidak valid atau ditolak server. Pastikan link video bersih dari parameter tambahan (seperti playlist).";
-  }
-
-  if (typeof data === "string") return data || `HTTP ${status}`;
-  if (data && typeof data === "object") return data.message || data.error || data.status || data.reason || `HTTP ${status}`;
-  return `HTTP ${status}`;
-}
-
-const getHeaders = (cookie = "", customUa = "") => {
-  const ua = customUa || getRandomUA();
-  const isAndroid = ua.includes("Android");
-  const isIphone = ua.includes("iPhone");
-  const isMobile = isAndroid || isIphone;
-
-  let platform = '"Windows"';
-  if (isAndroid) platform = '"Android"';
-  else if (isIphone) platform = '"iOS"';
-  else if (ua.includes("Macintosh")) platform = '"macOS"';
-
-  return {
-    accept: "*/*",
-    "accept-encoding": "gzip, deflate, br",
-    "accept-language": "en-US,en;q=0.9",
-    "content-type": "application/json",
-    cookie,
-    origin: BASE,
-    referer: `${BASE}/`,
-    "sec-ch-ua": isMobile
-      ? '"Chromium";v="130", "Not?A_Brand";v="99"'
-      : '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-    "sec-ch-ua-mobile": isMobile ? "?1" : "?0",
-    "sec-ch-ua-platform": platform,
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "user-agent": ua
-  };
-};
-
-async function getCookie(retries = 2) {
-  const ua = getRandomUA();
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await apiClient.get(ANALYTICS, {
-        timeout: 10000,
-        headers: getHeaders("", ua)
-      });
-      return parseCookie((res.headers as any)["set-cookie"] || []);
-    } catch (e) {
-      if (i === retries - 1) return "";
+  let code = "";
+  if (data && typeof data === "object") {
+    if (data.status === "error" && data.error && typeof data.error === "object") {
+      code = data.error.code || "";
+    } else if (typeof data.error === "string") {
+      code = data.error;
     }
   }
-  return "";
-}
 
-async function postEndpoint(endpoint: string, url: string, cookie = "") {
-  try {
-    const ua = getRandomUA();
-    const res = await apiClient.post(endpoint, { url, payload: { url } }, {
-      timeout: 30000,
-      validateStatus: () => true,
-      responseType: "text",
-      transformResponse: [v => v],
-      headers: getHeaders(cookie, ua)
-    });
-    return {
-      endpoint,
-      status: res.status,
-      data: parseData(res.data)
-    };
-  } catch (err: any) {
-    return {
-      endpoint,
-      status: err.response?.status || 500,
-      data: null
-    };
+  if (code) {
+    const cleanCode = code.toLowerCase();
+
+    // Auth errors — all public Cobalt instances now require JWT or API key
+    if (cleanCode.includes("auth.jwt") || cleanCode.includes("auth.apikey") || cleanCode.includes("jwt.missing")) {
+      return "⚠️ Instance Cobalt ini memerlukan otentikasi (JWT/API Key). " +
+        "Silakan tambahkan COBALT_API_KEY di .env.local atau ganti COBALT_API_URL ke instance yang tidak memerlukan auth.";
+    }
+    if (cleanCode.includes("auth")) {
+      return "⚠️ Akses ditolak. Layanan memerlukan otentikasi atau kunci API yang valid.";
+    }
+
+    if (cleanCode.includes("empty") || cleanCode.includes("invalid") || cleanCode.includes("url")) {
+      return "⚠️ Konten tidak ditemukan atau link tidak valid. Pastikan URL yang dimasukkan benar.";
+    }
+    if (cleanCode.includes("rate") || status === 429) {
+      return "⚠️ Terlalu banyak permintaan (Limit Terlampaui). Mohon tunggu beberapa saat sebelum mencoba lagi.";
+    }
+    if (cleanCode.includes("youtube")) {
+      return "⚠️ Gagal mengekstrak video YouTube. Server mendeteksi pembatasan akses.";
+    }
+    if (cleanCode.includes("content.too_long") || cleanCode.includes("link.short")) {
+      return "⚠️ Link media tidak didukung atau terlalu panjang. Coba gunakan link langsung ke video.";
+    }
+    if (cleanCode.includes("service")) {
+      return "⚠️ Platform ini belum didukung atau sedang mengalami gangguan. Coba platform lain.";
+    }
+    if (cleanCode.includes("fetch") || cleanCode.includes("fail") || cleanCode.includes("critical")) {
+      return "⚠️ Server gagal mengunduh media dari link tersebut. Silakan coba lagi nanti.";
+    }
   }
+
+  if (status === 401) {
+    return "⚠️ Instance Cobalt ini memerlukan otentikasi. " +
+      "Tambahkan COBALT_API_KEY di .env.local atau arahkan COBALT_API_URL ke instance tanpa auth.";
+  }
+  if (status === 403) {
+    return "⚠️ URL tidak valid atau ditolak server. Pastikan link video bersih dari parameter tambahan (seperti playlist).";
+  }
+  if (status === 429) {
+    return "⚠️ Terlalu banyak permintaan. Mohon tunggu sebentar, lalu coba lagi.";
+  }
+
+  return "⚠️ Gagal mengekstrak media. Silakan periksa kembali URL Anda dan coba lagi.";
 }
 
-async function tryDownload(url: string) {
-  let cookie = await getCookie();
-  console.log("tryDownload: fetched cookie:", cookie);
-  let result = await postEndpoint(DOWNLOAD, url, cookie);
-  console.log("tryDownload: 1st DOWNLOAD response status:", result.status, "data:", JSON.stringify(result.data));
-
-  if (isOk(result.status, result.data)) return result;
-
-  cookie = await getCookie();
-  console.log("tryDownload: fetched cookie 2:", cookie);
-  result = await postEndpoint(DOWNLOAD, url, cookie);
-  console.log("tryDownload: 2nd DOWNLOAD response status:", result.status, "data:", JSON.stringify(result.data));
-
-  if (isOk(result.status, result.data)) return result;
-
-  result = await postEndpoint(NYT, url, cookie);
-  console.log("tryDownload: NYT response status:", result.status, "data:", JSON.stringify(result.data));
-  return result;
+function getExtension(filename: string): string {
+  if (!filename) return "";
+  const parts = filename.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
 }
 
-// 4. Global promise maps so we don't fetch the exact same URL concurrently
+function getTitle(filename: string): string {
+  if (!filename) return "Extracted Media";
+  const parts = filename.split(".");
+  if (parts.length > 1) {
+    parts.pop();
+  }
+  return parts.join(".");
+}
+
+function getQualityFromFilename(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.includes("8k") || lower.includes("4320p")) return "4320p (8K)";
+  if (lower.includes("4k") || lower.includes("2160p")) return "2160p (4K)";
+  if (lower.includes("2k") || lower.includes("1440p")) return "1440p (2K)";
+  if (lower.includes("1080p") || lower.includes("1080")) return "1080p (FHD)";
+  if (lower.includes("720p") || lower.includes("720")) return "720p (HD)";
+  if (lower.includes("480p") || lower.includes("480")) return "480p";
+  if (lower.includes("360p") || lower.includes("360")) return "360p";
+  if (lower.includes("240p") || lower.includes("240")) return "240p";
+  if (lower.includes("144p") || lower.includes("144")) return "144p";
+  return "1080p (FHD)";
+}
+
+// Global promise maps so we don't fetch the exact same URL concurrently
 // This prevents overwhelming the server if many people ask for the same video simultaneously
 const pendingRequests = new Map<string, Promise<any>>();
 
@@ -203,48 +166,181 @@ export async function downr(url: string) {
       throw new Error("Invalid url.");
     }
 
+    const sanitizedUrl = sanitizeUrl(url);
+
     // Checking Cache First
-    if (cache.has(url)) {
-      const cached = cache.get(url)!;
+    if (cache.has(sanitizedUrl)) {
+      const cached = cache.get(sanitizedUrl)!;
       if (Date.now() < cached.expiresAt) {
         return cached.data;
       } else {
-        cache.delete(url);
+        cache.delete(sanitizedUrl);
       }
     }
 
     // Coalesce duplicate pending requests (Dog-pile prevention)
-    if (pendingRequests.has(url)) {
-      return await pendingRequests.get(url);
+    if (pendingRequests.has(sanitizedUrl)) {
+      return await pendingRequests.get(sanitizedUrl);
     }
 
     const requestPromise = (async () => {
-      const result = await tryDownload(url);
-      const ok = isOk(result.status, result.data);
+      // Call Cobalt in parallel for video (auto mode = best video+audio merged) and audio-only
+      const videoPromise = axios.post(
+        COBALT_API,
+        {
+          url: sanitizedUrl,
+          videoQuality: "max",
+          downloadMode: "auto"
+        },
+        {
+          headers: buildCobaltHeaders(),
+          timeout: 30000,
+          validateStatus: () => true
+        }
+      );
+
+      const audioPromise = axios.post(
+        COBALT_API,
+        {
+          url: sanitizedUrl,
+          downloadMode: "audio"
+        },
+        {
+          headers: buildCobaltHeaders(),
+          timeout: 30000,
+          validateStatus: () => true
+        }
+      );
+
+      const [videoResult, audioResult] = await Promise.allSettled([videoPromise, audioPromise]);
+
+      const medias: any[] = [];
+      let title = "Extracted Media";
+      let thumbnail: string | null = null;
+
+      if (videoResult.status === "fulfilled" && videoResult.value) {
+        const { status, data } = videoResult.value;
+        if (isCobaltOk(status, data)) {
+          if (data.status === "picker") {
+            if (Array.isArray(data.picker)) {
+              data.picker.forEach((item: any, index: number) => {
+                const ext = item.type === "photo" ? "jpg" : (item.type === "gif" ? "gif" : "mp4");
+                medias.push({
+                  url: item.url,
+                  type: item.type || "photo",
+                  ext: ext,
+                  quality: "original",
+                  label: `${item.type || "photo"} #${index + 1}`,
+                  hasAudio: item.type === "video",
+                  audio: item.type === "video"
+                });
+                if (!thumbnail && item.thumb) {
+                  thumbnail = item.thumb;
+                }
+              });
+            }
+          } else {
+            const filename = data.filename || "";
+            const ext = getExtension(filename) || "mp4";
+            title = getTitle(filename);
+            medias.push({
+              url: data.url,
+              type: "video",
+              ext: ext,
+              quality: getQualityFromFilename(filename),
+              label: getQualityFromFilename(filename),
+              hasAudio: true,
+              audio: true
+            });
+          }
+        }
+      }
+
+      if (audioResult.status === "fulfilled" && audioResult.value) {
+        const { status, data } = audioResult.value;
+        if (isCobaltOk(status, data)) {
+          if (data.status === "tunnel" || data.status === "redirect") {
+            const filename = data.filename || "";
+            const ext = getExtension(filename) || "mp3";
+            if (title === "Extracted Media" && filename) {
+              title = getTitle(filename);
+            }
+            medias.push({
+              url: data.url,
+              type: "audio",
+              ext: ext,
+              quality: "320kbps",
+              label: "Best Audio",
+              hasAudio: true,
+              audio: true
+            });
+          }
+        }
+      }
+
+      const ok = medias.length > 0;
+
+      if (!ok) {
+        let errorData: any = null;
+        let errorCode = 500;
+
+        if (videoResult.status === "fulfilled") {
+          errorData = videoResult.value.data;
+          errorCode = videoResult.value.status;
+        } else if (videoResult.status === "rejected") {
+          const error = (videoResult as PromiseRejectedResult).reason;
+          errorData = error?.response?.data || error;
+          errorCode = error?.response?.status || 500;
+        }
+
+        if (!errorData && audioResult.status === "fulfilled") {
+          errorData = audioResult.value.data;
+          errorCode = audioResult.value.status;
+        } else if (!errorData && audioResult.status === "rejected") {
+          const error = (audioResult as PromiseRejectedResult).reason;
+          errorData = error?.response?.data || error;
+          errorCode = error?.response?.status || 500;
+        }
+
+        const errorMsg = getError(errorData, errorCode);
+        return {
+          Status: false,
+          Code: errorCode,
+          Input: sanitizedUrl,
+          Endpoint: COBALT_API,
+          Result: null,
+          Error: errorMsg
+        };
+      }
 
       const finalOutput = {
-        Status: ok,
-        Code: result.status,
-        Input: url,
-        Endpoint: result.endpoint,
-        Result: ok ? result.data : null,
-        Error: ok ? null : getError(result.data, result.status)
+        Status: true,
+        Code: 200,
+        Input: sanitizedUrl,
+        Endpoint: COBALT_API,
+        Result: {
+          title,
+          thumbnail,
+          author: null,
+          source: "Cobalt",
+          duration: null,
+          medias
+        },
+        Error: null
       };
 
-      if (ok) {
-         // Save to cache on success
-         cache.set(url, {
-           data: finalOutput,
-           expiresAt: Date.now() + CACHE_TTL_MS
-         });
-      }
+      // Save to cache on success
+      cache.set(sanitizedUrl, {
+        data: finalOutput,
+        expiresAt: Date.now() + CACHE_TTL_MS
+      });
 
       return finalOutput;
     })();
 
-    pendingRequests.set(url, requestPromise);
+    pendingRequests.set(sanitizedUrl, requestPromise);
     const data = await requestPromise;
-    pendingRequests.delete(url);
+    pendingRequests.delete(sanitizedUrl);
     return data;
   } catch (err: any) {
     pendingRequests.delete(url);
@@ -252,9 +348,9 @@ export async function downr(url: string) {
       Status: false,
       Code: err.response?.status || 500,
       Input: url || null,
-      Endpoint: null,
+      Endpoint: COBALT_API,
       Result: null,
-      Error: err.message
+      Error: err.message || "Unknown error"
     };
   }
 }
