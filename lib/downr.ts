@@ -62,7 +62,7 @@ function parseData(data: any) {
   }
 }
 
-function isOk(status: number, data: any) {
+export function isOk(status: number, data: any) {
   const isObject = data && typeof data === "object";
   if (status < 200 || status >= 300) return false;
   if (data === null || data === undefined) return false;
@@ -70,19 +70,49 @@ function isOk(status: number, data: any) {
   if (data === "error") return false;
   if (data === "failed") return false;
   if (data === "user_retry_required") return false;
-  if (isObject && data.error === true) return false;
-  if (isObject && data.status === false) return false;
-  if (isObject && data.success === false) return false;
+  if (isObject) {
+    if (data.error === true || data.Error === true) return false;
+    if (data.status === false || data.Status === false) return false;
+    if (data.success === false || data.Success === false) return false;
+    if (data.code === 403 || data.Code === 403) return false;
+    if (data.error === "user_retry_required" || data.Error === "user_retry_required") return false;
+  }
   return true;
 }
 
-function getError(data: any, status: number) {
+export function getError(data: any, status: number) {
+  const isObject = data && typeof data === "object";
+  const hasDeceptiveError = 
+    data === "user_retry_required" ||
+    (isObject && (
+      data.Status === false ||
+      data.status === false ||
+      data.Code === 403 ||
+      data.code === 403 ||
+      data.Error === "user_retry_required" ||
+      data.error === "user_retry_required"
+    ));
+    
+  if (hasDeceptiveError) {
+    return "⚠️ URL tidak valid atau ditolak server. Pastikan link video bersih dari parameter tambahan (seperti playlist).";
+  }
+
   if (typeof data === "string") return data || `HTTP ${status}`;
   if (data && typeof data === "object") return data.message || data.error || data.status || data.reason || `HTTP ${status}`;
   return `HTTP ${status}`;
 }
 
-const getHeaders = (cookie = "") => {
+const getHeaders = (cookie = "", customUa = "") => {
+  const ua = customUa || getRandomUA();
+  const isAndroid = ua.includes("Android");
+  const isIphone = ua.includes("iPhone");
+  const isMobile = isAndroid || isIphone;
+
+  let platform = '"Windows"';
+  if (isAndroid) platform = '"Android"';
+  else if (isIphone) platform = '"iOS"';
+  else if (ua.includes("Macintosh")) platform = '"macOS"';
+
   return {
     accept: "*/*",
     "accept-encoding": "gzip, deflate, br",
@@ -91,22 +121,25 @@ const getHeaders = (cookie = "") => {
     cookie,
     origin: BASE,
     referer: `${BASE}/`,
-    "sec-ch-ua": '"Chromium";v="130", "Not?A_Brand";v="99"',
-    "sec-ch-ua-mobile": "?1",
-    "sec-ch-ua-platform": '"Android"',
+    "sec-ch-ua": isMobile
+      ? '"Chromium";v="130", "Not?A_Brand";v="99"'
+      : '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+    "sec-ch-ua-mobile": isMobile ? "?1" : "?0",
+    "sec-ch-ua-platform": platform,
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
-    "user-agent": getRandomUA()
+    "user-agent": ua
   };
 };
 
 async function getCookie(retries = 2) {
+  const ua = getRandomUA();
   for (let i = 0; i < retries; i++) {
     try {
       const res = await apiClient.get(ANALYTICS, {
         timeout: 10000,
-        headers: getHeaders()
+        headers: getHeaders("", ua)
       });
       return parseCookie((res.headers as any)["set-cookie"] || []);
     } catch (e) {
@@ -118,12 +151,13 @@ async function getCookie(retries = 2) {
 
 async function postEndpoint(endpoint: string, url: string, cookie = "") {
   try {
-    const res = await apiClient.post(endpoint, { url }, {
+    const ua = getRandomUA();
+    const res = await apiClient.post(endpoint, { url, payload: { url } }, {
       timeout: 30000,
       validateStatus: () => true,
       responseType: "text",
       transformResponse: [v => v],
-      headers: getHeaders(cookie)
+      headers: getHeaders(cookie, ua)
     });
     return {
       endpoint,
@@ -141,16 +175,21 @@ async function postEndpoint(endpoint: string, url: string, cookie = "") {
 
 async function tryDownload(url: string) {
   let cookie = await getCookie();
+  console.log("tryDownload: fetched cookie:", cookie);
   let result = await postEndpoint(DOWNLOAD, url, cookie);
+  console.log("tryDownload: 1st DOWNLOAD response status:", result.status, "data:", JSON.stringify(result.data));
 
   if (isOk(result.status, result.data)) return result;
 
   cookie = await getCookie();
+  console.log("tryDownload: fetched cookie 2:", cookie);
   result = await postEndpoint(DOWNLOAD, url, cookie);
+  console.log("tryDownload: 2nd DOWNLOAD response status:", result.status, "data:", JSON.stringify(result.data));
 
   if (isOk(result.status, result.data)) return result;
 
   result = await postEndpoint(NYT, url, cookie);
+  console.log("tryDownload: NYT response status:", result.status, "data:", JSON.stringify(result.data));
   return result;
 }
 

@@ -215,16 +215,46 @@ export default function Home() {
     }
   };
 
+  const sanitizeUrl = (inputUrl: string): string => {
+    try {
+      const trimmed = inputUrl.trim();
+      const parsed = new URL(trimmed);
+      const params = new URLSearchParams(parsed.search);
+      
+      // Specifically strip out 'list' and 'si'
+      params.delete("list");
+      params.delete("si");
+      
+      // Strip out any trailing empty parameters
+      const keysToDelete: string[] = [];
+      params.forEach((value, key) => {
+        if (!key || value === "" || value === null || value === undefined) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach(key => params.delete(key));
+      
+      const searchString = params.toString();
+      parsed.search = searchString ? `?${searchString}` : "";
+      return parsed.toString();
+    } catch (e) {
+      return inputUrl.trim();
+    }
+  };
+
   const handleDownload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+
+    const sanitizedUrl = sanitizeUrl(url);
+    setUrl(sanitizedUrl);
     
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const res = await fetch(`/api/download?url=${encodeURIComponent(url)}`, {
+      const res = await fetch(`/api/download?url=${encodeURIComponent(sanitizedUrl)}`, {
         method: "GET",
       });
       
@@ -242,7 +272,17 @@ export default function Home() {
       }
       
       if (!data || !data.Status) {
-        setError(data?.Error || "Failed to extract media. Please check the URL and try again.");
+        const errorMsg = data?.Error || "";
+        if (
+          errorMsg === "user_retry_required" ||
+          data?.Code === 403 ||
+          errorMsg.includes("user_retry_required") ||
+          errorMsg.includes("diterima server")
+        ) {
+          setError("⚠️ URL tidak valid atau ditolak server. Pastikan link video bersih dari parameter tambahan (seperti playlist).");
+        } else {
+          setError(errorMsg || "Failed to extract media. Please check the URL and try again.");
+        }
       } else {
         setResult(data.Result);
       }
@@ -300,6 +340,9 @@ export default function Home() {
 
   const sortedMp4Videos = [...mp4Videos].sort((a, b) => getResolution(b) - getResolution(a));
   const sortedWebmVideos = [...webmVideos].sort((a, b) => getResolution(b) - getResolution(a));
+
+  const bestMp4WithAudio = sortedMp4Videos.find((item: any) => item.hasAudio !== false && item.audio !== false);
+  const bestWebmWithAudio = sortedWebmVideos.find((item: any) => item.hasAudio !== false && item.audio !== false);
 
   const getAudioQuality = (item: any) => {
     const quality = (item.quality || item.label || '').toLowerCase();
@@ -656,24 +699,42 @@ export default function Home() {
                               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 mb-1">MP4 Format</span>
                               {sortedMp4Videos.length > 0 ? (
                                 <div className="flex flex-col gap-2">
-                                  {sortedMp4Videos.map((item: any, idx: number) => (
-                                    <button 
-                                      key={idx}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        const title = result.title || "extracted_media";
-                                        const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
-                                        const ext = item.ext || "mp4";
-                                        const quality = item.quality || item.label || "";
-                                        const filename = `${cleanTitle}_${quality ? `${quality}_` : ""}${idx + 1}.${ext}`;
-                                        forceDownload(item.url, filename);
-                                      }}
-                                      className="flex items-center justify-center gap-2 bg-white text-black font-bold text-xs py-2.5 px-4 rounded-xl hover:bg-zinc-200 transition-all cursor-pointer active:scale-95 duration-200 shadow-sm w-full"
-                                    >
-                                      <Download className="w-3.5 h-3.5 shrink-0" />
-                                      <span className="truncate">{getMediaLabel(item)}</span>
-                                    </button>
-                                  ))}
+                                  {sortedMp4Videos.map((item: any, idx: number) => {
+                                    const hasAudio = item.hasAudio !== false && item.audio !== false;
+                                    const isBestWithAudio = bestMp4WithAudio && item === bestMp4WithAudio;
+                                    return (
+                                      <button 
+                                        key={idx}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          const title = result.title || "extracted_media";
+                                          const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+                                          const ext = item.ext || "mp4";
+                                          const quality = item.quality || item.label || "";
+                                          const filename = `${cleanTitle}_${quality ? `${quality}_` : ""}${idx + 1}.${ext}`;
+                                          forceDownload(item.url, filename);
+                                        }}
+                                        className="flex items-center justify-between gap-3 bg-white text-black font-bold text-xs py-2.5 px-4 rounded-xl hover:bg-zinc-200 transition-all cursor-pointer active:scale-95 duration-200 shadow-sm w-full"
+                                      >
+                                        <span className="flex items-center gap-2 truncate text-left">
+                                          <Download className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="truncate">{getMediaLabel(item)}</span>
+                                        </span>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {!hasAudio && (
+                                            <span className="bg-red-500/10 text-red-600 border border-red-500/20 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider flex items-center gap-1 font-extrabold select-none">
+                                              🔇 Video Only
+                                            </span>
+                                          )}
+                                          {isBestWithAudio && (
+                                            <span className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider flex items-center gap-1 font-extrabold select-none">
+                                              🔊 Best with Audio
+                                            </span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="text-zinc-600 text-xs py-3 px-4 border border-dashed border-white/5 rounded-xl text-center">
@@ -687,24 +748,42 @@ export default function Home() {
                               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 mb-1">WEBM Format</span>
                               {sortedWebmVideos.length > 0 ? (
                                 <div className="flex flex-col gap-2">
-                                  {sortedWebmVideos.map((item: any, idx: number) => (
-                                    <button 
-                                      key={idx}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        const title = result.title || "extracted_media";
-                                        const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
-                                        const ext = item.ext || "webm";
-                                        const quality = item.quality || item.label || "";
-                                        const filename = `${cleanTitle}_${quality ? `${quality}_` : ""}${idx + 1}.${ext}`;
-                                        forceDownload(item.url, filename);
-                                      }}
-                                      className="flex items-center justify-center gap-2 bg-white text-black font-bold text-xs py-2.5 px-4 rounded-xl hover:bg-zinc-200 transition-all cursor-pointer active:scale-95 duration-200 shadow-sm w-full"
-                                    >
-                                      <Download className="w-3.5 h-3.5 shrink-0" />
-                                      <span className="truncate">{getMediaLabel(item)}</span>
-                                    </button>
-                                  ))}
+                                  {sortedWebmVideos.map((item: any, idx: number) => {
+                                    const hasAudio = item.hasAudio !== false && item.audio !== false;
+                                    const isBestWithAudio = bestWebmWithAudio && item === bestWebmWithAudio;
+                                    return (
+                                      <button 
+                                        key={idx}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          const title = result.title || "extracted_media";
+                                          const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+                                          const ext = item.ext || "webm";
+                                          const quality = item.quality || item.label || "";
+                                          const filename = `${cleanTitle}_${quality ? `${quality}_` : ""}${idx + 1}.${ext}`;
+                                          forceDownload(item.url, filename);
+                                        }}
+                                        className="flex items-center justify-between gap-3 bg-white text-black font-bold text-xs py-2.5 px-4 rounded-xl hover:bg-zinc-200 transition-all cursor-pointer active:scale-95 duration-200 shadow-sm w-full"
+                                      >
+                                        <span className="flex items-center gap-2 truncate text-left">
+                                          <Download className="w-3.5 h-3.5 shrink-0" />
+                                          <span className="truncate">{getMediaLabel(item)}</span>
+                                        </span>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {!hasAudio && (
+                                            <span className="bg-red-500/10 text-red-600 border border-red-500/20 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider flex items-center gap-1 font-extrabold select-none">
+                                              🔇 Video Only
+                                            </span>
+                                          )}
+                                          {isBestWithAudio && (
+                                            <span className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider flex items-center gap-1 font-extrabold select-none">
+                                              🔊 Best with Audio
+                                            </span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="text-zinc-600 text-xs py-3 px-4 border border-dashed border-white/5 rounded-xl text-center">

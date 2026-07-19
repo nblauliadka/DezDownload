@@ -1,4 +1,4 @@
-// File: /home/nblauliadka/Downloads/files/DezDownload/app/api/download/route.ts
+// File: /home/nblauliadka/Downloads/docs/files/DezDownload/app/api/download/route.ts
 import * as entry from '../../../../../app/api/download/route.js'
 import type { NextRequest } from 'next/server.js'
 
