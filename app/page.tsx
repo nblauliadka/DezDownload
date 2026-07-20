@@ -5,7 +5,7 @@ import {
   Download, Link as LinkIcon, AlertCircle, CheckCircle2, Loader2, Sparkles, Globe, Github, X, Menu,
   Video, Instagram, Youtube, Twitter, MessageSquare, Music, Headphones, Tv, Ghost, Facebook,
   MessageCircle, Image, Linkedin, Play, Share2, Film, Disc, Smile, FileText, Gitlab, Clipboard,
-  Wrench, Rocket, ExternalLink, Zap, Shield, Clock
+  Wrench, ExternalLink, Server
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { forceDownload } from "@/lib/utils";
@@ -1254,7 +1254,7 @@ export default function Home() {
 
     </div>
 
-      {/* ── LAYER 1: Grand Announcement Modal ─────────────────────────────── */}
+      {/* ── LAYER 1: Maintenance Modal ─────────────────────────────────────── */}
       <AnimatePresence>
         {showMaintenanceModal && (
           <>
@@ -1263,126 +1263,86 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="fixed inset-0 bg-black/75 backdrop-blur-md z-[200] cursor-pointer"
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] cursor-pointer"
               onClick={() => setShowMaintenanceModal(false)}
             />
 
             {/* Modal Panel */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 32 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={{ type: "spring", damping: 28, stiffness: 280, delay: 0.05 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[92%] max-w-lg"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[92%] max-w-md"
               role="dialog"
               aria-modal="true"
               aria-labelledby="maintenance-modal-title"
             >
-              {/* Glow backdrop blur card */}
-              <div
-                className="relative bg-[#0c0c0e] border border-white/10 rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.06)] overflow-hidden"
-              >
-                {/* Decorative amber/orange gradient orb at top */}
-                <div
-                  aria-hidden="true"
-                  className="absolute -top-20 left-1/2 -translate-x-1/2 w-72 h-40 rounded-full pointer-events-none"
-                  style={{
-                    background:
-                      "radial-gradient(ellipse at center, rgba(217,119,6,0.22) 0%, rgba(217,119,6,0.06) 55%, transparent 80%)",
-                  }}
-                />
+              <div className="bg-[#0a0a0a] border border-white/[0.08] rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
 
-                {/* Close button */}
-                <button
-                  onClick={() => setShowMaintenanceModal(false)}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-white p-1.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer z-10"
-                  aria-label="Close announcement"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 pt-5 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <Server className="w-[15px] h-[15px] text-zinc-500 shrink-0" strokeWidth={1.5} />
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest select-none">
+                      Service Notice
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowMaintenanceModal(false)}
+                    className="text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer p-1 rounded-md hover:bg-white/5"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-                <div className="relative z-10 flex flex-col items-center text-center px-8 pt-10 pb-8 gap-0">
+                {/* Hairline divider */}
+                <div className="h-px bg-white/[0.06] mx-6" />
 
-                  {/* Icon cluster */}
-                  <div className="relative mb-5">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shadow-[0_0_32px_rgba(217,119,6,0.3)] mx-auto">
-                      <Rocket className="w-8 h-8 text-amber-400" />
-                    </div>
-                    {/* Orbiting status dot */}
-                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 border-2 border-[#0c0c0e] flex items-center justify-center">
-                      <Wrench className="w-2.5 h-2.5 text-black" />
+                {/* Body */}
+                <div className="px-6 py-5">
+                  <h2
+                    id="maintenance-modal-title"
+                    className="text-[17px] font-semibold text-white tracking-tight leading-snug mb-2.5"
+                  >
+                    Scheduled maintenance
+                  </h2>
+
+                  <p className="text-[13px] text-zinc-400 leading-[1.75] mb-5">
+                    Our extraction engine is undergoing a core infrastructure migration to support higher throughput and improved reliability. We apologize for the inconvenience — the service will be restored shortly.
+                  </p>
+
+                  {/* Minimal status indicator */}
+                  <div className="flex items-center gap-2 py-3 border-t border-white/[0.06] mb-5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="text-[11px] text-zinc-500 font-medium tabular-nums">
+                      Extraction API&nbsp;&nbsp;—&nbsp;&nbsp;degraded
                     </span>
                   </div>
 
-                  {/* Live badge */}
-                  <div className="inline-flex items-center gap-1.5 bg-amber-950/60 border border-amber-700/40 text-amber-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    Scheduled Maintenance
-                  </div>
-
-                  {/* Headline */}
-                  <h2
-                    id="maintenance-modal-title"
-                    className="text-xl md:text-2xl font-extrabold text-white tracking-tight leading-snug mb-3"
-                  >
-                    System Update: Core Engine Migration 🚀
-                  </h2>
-
-                  {/* Body */}
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-2 max-w-sm">
-                    We are upgrading our <span className="text-white font-semibold">extraction engine infrastructure</span> to handle significantly higher traffic loads and deliver better media quality across all 60+ platforms.
-                  </p>
-                  <p className="text-xs text-zinc-500 leading-relaxed mb-7 max-w-sm">
-                    We sincerely apologize for this temporary interruption. The service will be back online as soon as the migration is complete.
-                  </p>
-
-                  {/* Status indicators */}
-                  <div className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 mb-7 grid grid-cols-3 gap-4 text-center">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      </div>
-                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Engine</span>
-                      <span className="text-[10px] text-amber-400 font-bold">Migrating</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                        <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                      </div>
-                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Data</span>
-                      <span className="text-[10px] text-emerald-400 font-bold">Secure</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                        <Clock className="w-3.5 h-3.5 text-blue-400" />
-                      </div>
-                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">ETA</span>
-                      <span className="text-[10px] text-blue-400 font-bold">Soon™</span>
-                    </div>
-                  </div>
-
                   {/* CTA Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <a
                       href="https://github.com/nblauliadka"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-zinc-100 text-black font-bold text-sm py-3 px-5 rounded-full transition-all duration-200 active:scale-95 shadow-lg cursor-pointer"
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-white hover:bg-zinc-100 text-black font-semibold text-[13px] py-2.5 px-4 rounded-lg transition-colors duration-150 active:scale-[0.98] cursor-pointer"
                     >
-                      <Github className="w-4 h-4" />
-                      Explore My Other Projects
-                      <ExternalLink className="w-3 h-3 opacity-60" />
+                      <Github className="w-3.5 h-3.5" />
+                      View my projects
+                      <ExternalLink className="w-3 h-3 opacity-40" />
                     </a>
                     <button
                       onClick={() => setShowMaintenanceModal(false)}
-                      className="flex-1 bg-transparent hover:bg-white/5 border border-white/10 text-zinc-400 hover:text-white font-semibold text-sm py-3 px-5 rounded-full transition-all duration-200 cursor-pointer"
+                      className="flex-1 bg-transparent hover:bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-zinc-200 font-medium text-[13px] py-2.5 px-4 rounded-lg transition-colors duration-150 cursor-pointer"
                     >
                       Dismiss
                     </button>
                   </div>
-
                 </div>
+
               </div>
             </motion.div>
           </>
