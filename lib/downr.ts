@@ -8,6 +8,11 @@ const COBALT_BASE_URL = (process.env.COBALT_API_URL || "https://api.cobalt.tools
 const COBALT_API = `${COBALT_BASE_URL}/`;
 const COBALT_API_KEY = process.env.COBALT_API_KEY || "";
 
+// [DIAG] Log resolved env vars on module load so misconfigurations are immediately visible
+console.log("[downr] COBALT_BASE_URL resolved to:", JSON.stringify(COBALT_BASE_URL));
+console.log("[downr] COBALT_API endpoint:", JSON.stringify(COBALT_API));
+console.log("[downr] COBALT_API_KEY present:", COBALT_API_KEY ? `yes (${COBALT_API_KEY.length} chars)` : "no");
+
 function buildCobaltHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -184,6 +189,13 @@ export async function downr(url: string) {
     }
 
     const requestPromise = (async () => {
+      const cobaltHeaders = buildCobaltHeaders();
+
+      // [DIAG] Log exact request being sent to Cobalt before the fetch
+      console.log("[downr] >>> POST", COBALT_API);
+      console.log("[downr] >>> Headers:", JSON.stringify(cobaltHeaders));
+      console.log("[downr] >>> Body (video):", JSON.stringify({ url: sanitizedUrl, videoQuality: "max", downloadMode: "auto" }));
+
       // Call Cobalt in parallel for video (auto mode = best video+audio merged) and audio-only
       const videoPromise = axios.post(
         COBALT_API,
@@ -193,7 +205,7 @@ export async function downr(url: string) {
           downloadMode: "auto"
         },
         {
-          headers: buildCobaltHeaders(),
+          headers: cobaltHeaders,
           timeout: 30000,
           validateStatus: () => true
         }
@@ -206,13 +218,27 @@ export async function downr(url: string) {
           downloadMode: "audio"
         },
         {
-          headers: buildCobaltHeaders(),
+          headers: cobaltHeaders,
           timeout: 30000,
           validateStatus: () => true
         }
       );
 
       const [videoResult, audioResult] = await Promise.allSettled([videoPromise, audioPromise]);
+
+      // [DIAG] Log raw Cobalt responses
+      if (videoResult.status === "fulfilled") {
+        console.log("[downr] <<< Video HTTP Status:", videoResult.value.status);
+        console.log("[downr] <<< Video Raw Response:", JSON.stringify(videoResult.value.data));
+      } else {
+        console.error("[downr] <<< Video Request REJECTED:", videoResult.reason?.message, videoResult.reason?.code, videoResult.reason?.config?.url);
+      }
+      if (audioResult.status === "fulfilled") {
+        console.log("[downr] <<< Audio HTTP Status:", audioResult.value.status);
+        console.log("[downr] <<< Audio Raw Response:", JSON.stringify(audioResult.value.data));
+      } else {
+        console.error("[downr] <<< Audio Request REJECTED:", audioResult.reason?.message, audioResult.reason?.code, audioResult.reason?.config?.url);
+      }
 
       const medias: any[] = [];
       let title = "Extracted Media";
@@ -343,6 +369,11 @@ export async function downr(url: string) {
     pendingRequests.delete(sanitizedUrl);
     return data;
   } catch (err: any) {
+    // [DIAG] Surface the raw error — do NOT swallow this
+    console.error("[downr] CAUGHT OUTER ERROR:", err?.message);
+    console.error("[downr] Error code:", err?.code);
+    console.error("[downr] Error config URL:", err?.config?.url);
+    console.error("[downr] Full error:", err);
     pendingRequests.delete(url);
     return {
       Status: false,
