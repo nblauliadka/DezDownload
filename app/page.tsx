@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Download, Link as LinkIcon, AlertCircle, CheckCircle2, Loader2, Sparkles, Globe, Github, X, Menu,
   Video, Instagram, Youtube, Twitter, MessageSquare, Music, Headphones, Tv, Ghost, Facebook,
-  MessageCircle, Image, Linkedin, Play, Share2, Film, Disc, Smile, FileText, Gitlab, Clipboard
+  MessageCircle, Image, Linkedin, Play, Share2, Film, Disc, Smile, FileText, Gitlab, Clipboard,
+  Wrench, Rocket, ExternalLink, Zap, Shield, Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { forceDownload } from "@/lib/utils";
@@ -119,7 +120,34 @@ export default function Home() {
   const resultRef = useRef<HTMLDivElement>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<"success" | "info" | "error">("success");
+  const [toastType, setToastType] = useState<"success" | "info" | "error" | "warning">("success");
+
+  // ── MAINTENANCE MODE ──────────────────────────────────────────────
+  const MAINTENANCE_MODE = true;
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const maintenanceToastFired = useRef(false);
+  // ─────────────────────────────────────────────────────────────────
+
+  // Show maintenance modal on mount (with short delay for polish)
+  useEffect(() => {
+    if (MAINTENANCE_MODE) {
+      const timer = setTimeout(() => setShowMaintenanceModal(true), 600);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Auto-dismiss maintenance toast after 5 s
+  const fireMaintenanceToast = useCallback(() => {
+    if (maintenanceToastFired.current) return;
+    maintenanceToastFired.current = true;
+    setToastType("warning");
+    setToastMessage("Server sedang dalam perbaikan 🛠️. Silakan cek GitHub kami untuk sementara waktu!");
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+      maintenanceToastFired.current = false;
+    }, 5000);
+  }, []);
 
   useEffect(() => {
     if (result) {
@@ -384,6 +412,7 @@ export default function Home() {
   };
 
   return (
+    <>
     <div className="flex flex-col min-h-screen w-full bg-[#050505] selection:bg-white selection:text-black overflow-x-hidden">
       
       {/* Floating Pill Navigation */}
@@ -533,20 +562,54 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
             className="w-full px-4 md:px-6 max-w-4xl lg:max-w-5xl mx-auto relative z-10"
           >
-            <form onSubmit={handleDownload} className="w-full h-14 md:h-16 chess-glass rounded-full p-1.5 md:p-2 pl-4 md:pl-8 flex items-center gap-2 md:gap-3 shadow-2xl focus-within:ring-2 focus-within:ring-white/20 transition-all">
+            {/* ── LAYER 3: Static Maintenance Banner ─────────────────────── */}
+            {MAINTENANCE_MODE && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="mb-4 w-full flex items-start gap-3 bg-amber-950/40 border border-amber-700/40 text-amber-300 text-xs font-semibold px-5 py-3.5 rounded-2xl shadow-[0_0_24px_rgba(217,119,6,0.12)] backdrop-blur-md"
+              >
+                <Wrench className="w-4 h-4 shrink-0 mt-0.5 animate-pulse text-amber-400" />
+                <span className="leading-relaxed">
+                  <span className="text-amber-200 font-bold">⚠️ Extraction servers are currently down for maintenance.</span>{" "}
+                  While waiting, check out other cool stuff on{" "}
+                  <a
+                    href="https://github.com/nblauliadka"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-200 underline underline-offset-2 hover:text-white transition-colors font-bold"
+                  >
+                    GitHub ↗
+                  </a>
+                  .
+                </span>
+              </motion.div>
+            )}
+
+            <form
+              onSubmit={MAINTENANCE_MODE ? (e) => { e.preventDefault(); fireMaintenanceToast(); } : handleDownload}
+              className="w-full h-14 md:h-16 chess-glass rounded-full p-1.5 md:p-2 pl-4 md:pl-8 flex items-center gap-2 md:gap-3 shadow-2xl focus-within:ring-2 focus-within:ring-white/20 transition-all"
+              style={MAINTENANCE_MODE ? { opacity: 0.6, filter: "saturate(0.4)" } : {}}
+            >
+              {/* ── LAYER 2: Input Blockade ──────────────────────────────── */}
               <input 
                 type="url" 
-                placeholder="Paste URL here..." 
-                className="flex-1 w-full max-w-[90vw] bg-transparent border-0 outline-none text-white text-base py-2 md:py-4 pl-1 md:pl-2 placeholder:text-zinc-600 focus:ring-0 focus:outline-none min-w-0"
+                placeholder={MAINTENANCE_MODE ? "Maintenance in progress..." : "Paste URL here..."}
+                className="flex-1 w-full max-w-[90vw] bg-transparent border-0 outline-none text-white text-base py-2 md:py-4 pl-1 md:pl-2 placeholder:text-zinc-600 focus:ring-0 focus:outline-none min-w-0 cursor-not-allowed select-none"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={loading}
+                readOnly={MAINTENANCE_MODE}
+                onChange={MAINTENANCE_MODE ? undefined : (e) => setUrl(e.target.value)}
+                onClick={MAINTENANCE_MODE ? fireMaintenanceToast : undefined}
+                onFocus={MAINTENANCE_MODE ? fireMaintenanceToast : undefined}
+                disabled={!MAINTENANCE_MODE && loading}
                 required
               />
               {/* Clipboard Auto-Paste Button */}
               <button
                 type="button"
                 onClick={async () => {
+                  if (MAINTENANCE_MODE) { fireMaintenanceToast(); return; }
                   try {
                     const text = await navigator.clipboard.readText();
                     if (text) setUrl(text);
@@ -555,16 +618,16 @@ export default function Home() {
                   }
                 }}
                 className="p-2 text-zinc-400 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/5 active:scale-95 shrink-0 flex items-center justify-center"
-                title="Paste from clipboard"
+                title={MAINTENANCE_MODE ? "Server maintenance" : "Paste from clipboard"}
               >
                 <Clipboard className="w-4 h-4 md:w-5 md:h-5" />
               </button>
               <button 
                 type="submit" 
-                disabled={loading || !url}
+                disabled={(!MAINTENANCE_MODE && (loading || !url))}
                 className="h-11 md:h-12 shrink-0 bg-white text-black text-xs md:text-sm font-bold px-4 md:px-8 rounded-full hover:bg-zinc-200 disabled:bg-zinc-900 disabled:text-zinc-700 transition-all flex items-center justify-center gap-1.5 md:gap-2 cursor-pointer disabled:cursor-not-allowed hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] active:scale-95 duration-200"
               >
-                {loading ? (
+                {!MAINTENANCE_MODE && loading ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> Processing
                   </>
@@ -1153,6 +1216,8 @@ export default function Home() {
                 ? "border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.15)]" 
                 : toastType === "error"
                 ? "border-red-500/30 shadow-[0_20px_50px_rgba(239,68,68,0.15)]"
+                : toastType === "warning"
+                ? "border-amber-500/40 shadow-[0_20px_50px_rgba(217,119,6,0.25)]"
                 : "border-blue-500/30 shadow-[0_20px_50px_rgba(59,130,246,0.15)]"
             } text-white px-5 py-3.5 rounded-2xl backdrop-blur-xl max-w-sm`}
           >
@@ -1161,6 +1226,8 @@ export default function Home() {
                 ? "bg-emerald-500/10" 
                 : toastType === "error"
                 ? "bg-red-500/10"
+                : toastType === "warning"
+                ? "bg-amber-500/10"
                 : "bg-blue-500/10"
             } flex items-center justify-center shrink-0`}
             >
@@ -1168,6 +1235,8 @@ export default function Home() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               ) : toastType === "error" ? (
                 <AlertCircle className="w-4 h-4 text-red-400" />
+              ) : toastType === "warning" ? (
+                <Wrench className="w-4 h-4 text-amber-400" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-blue-400" />
               )}
@@ -1184,5 +1253,142 @@ export default function Home() {
       </AnimatePresence>
 
     </div>
+
+      {/* ── LAYER 1: Grand Announcement Modal ─────────────────────────────── */}
+      <AnimatePresence>
+        {showMaintenanceModal && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 bg-black/75 backdrop-blur-md z-[200] cursor-pointer"
+              onClick={() => setShowMaintenanceModal(false)}
+            />
+
+            {/* Modal Panel */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 32 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
+              transition={{ type: "spring", damping: 28, stiffness: 280, delay: 0.05 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[92%] max-w-lg"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="maintenance-modal-title"
+            >
+              {/* Glow backdrop blur card */}
+              <div
+                className="relative bg-[#0c0c0e] border border-white/10 rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.06)] overflow-hidden"
+              >
+                {/* Decorative amber/orange gradient orb at top */}
+                <div
+                  aria-hidden="true"
+                  className="absolute -top-20 left-1/2 -translate-x-1/2 w-72 h-40 rounded-full pointer-events-none"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse at center, rgba(217,119,6,0.22) 0%, rgba(217,119,6,0.06) 55%, transparent 80%)",
+                  }}
+                />
+
+                {/* Close button */}
+                <button
+                  onClick={() => setShowMaintenanceModal(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white p-1.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer z-10"
+                  aria-label="Close announcement"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                <div className="relative z-10 flex flex-col items-center text-center px-8 pt-10 pb-8 gap-0">
+
+                  {/* Icon cluster */}
+                  <div className="relative mb-5">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shadow-[0_0_32px_rgba(217,119,6,0.3)] mx-auto">
+                      <Rocket className="w-8 h-8 text-amber-400" />
+                    </div>
+                    {/* Orbiting status dot */}
+                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 border-2 border-[#0c0c0e] flex items-center justify-center">
+                      <Wrench className="w-2.5 h-2.5 text-black" />
+                    </span>
+                  </div>
+
+                  {/* Live badge */}
+                  <div className="inline-flex items-center gap-1.5 bg-amber-950/60 border border-amber-700/40 text-amber-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    Scheduled Maintenance
+                  </div>
+
+                  {/* Headline */}
+                  <h2
+                    id="maintenance-modal-title"
+                    className="text-xl md:text-2xl font-extrabold text-white tracking-tight leading-snug mb-3"
+                  >
+                    System Update: Core Engine Migration 🚀
+                  </h2>
+
+                  {/* Body */}
+                  <p className="text-sm text-zinc-400 leading-relaxed mb-2 max-w-sm">
+                    We are upgrading our <span className="text-white font-semibold">extraction engine infrastructure</span> to handle significantly higher traffic loads and deliver better media quality across all 60+ platforms.
+                  </p>
+                  <p className="text-xs text-zinc-500 leading-relaxed mb-7 max-w-sm">
+                    We sincerely apologize for this temporary interruption. The service will be back online as soon as the migration is complete.
+                  </p>
+
+                  {/* Status indicators */}
+                  <div className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 mb-7 grid grid-cols-3 gap-4 text-center">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Engine</span>
+                      <span className="text-[10px] text-amber-400 font-bold">Migrating</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                        <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Data</span>
+                      <span className="text-[10px] text-emerald-400 font-bold">Secure</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                        <Clock className="w-3.5 h-3.5 text-blue-400" />
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">ETA</span>
+                      <span className="text-[10px] text-blue-400 font-bold">Soon™</span>
+                    </div>
+                  </div>
+
+                  {/* CTA Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    <a
+                      href="https://github.com/nblauliadka"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-zinc-100 text-black font-bold text-sm py-3 px-5 rounded-full transition-all duration-200 active:scale-95 shadow-lg cursor-pointer"
+                    >
+                      <Github className="w-4 h-4" />
+                      Explore My Other Projects
+                      <ExternalLink className="w-3 h-3 opacity-60" />
+                    </a>
+                    <button
+                      onClick={() => setShowMaintenanceModal(false)}
+                      className="flex-1 bg-transparent hover:bg-white/5 border border-white/10 text-zinc-400 hover:text-white font-semibold text-sm py-3 px-5 rounded-full transition-all duration-200 cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+    </>
   );
 }
